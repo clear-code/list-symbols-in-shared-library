@@ -1,4 +1,4 @@
-all: list-elf64-public-symbols
+all: list-elf64-public-function-names
 
-list-elf64-public-symbols: list-elf64-public-symbols.c
+list-elf64-public-function-names: list-elf64-public-function-names.c
 	$(CC) `pkg-config --cflags --libs glib-2.0` -o $@ $<
