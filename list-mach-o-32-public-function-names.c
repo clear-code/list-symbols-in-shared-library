@@ -29,8 +29,8 @@ main (int argc, char **argv)
     gchar *content;
     gsize length;
     gsize offset;
-    GPtrArray *all_symbols;
     uint32_t i, n_commands;
+    uint32_t segment_index = 0, text_segment_index = 0;
 
     if (argc < 2) {
         g_print("Usage: %s XXX.dylib\n", argv[0]);
@@ -52,52 +52,57 @@ main (int argc, char **argv)
         n_commands = header->ncmds;
     }
 
-    all_symbols = g_ptr_array_sized_new(n_commands);
     for (i = 0; i < n_commands; i++) {
         struct load_command *load;
 
         load = (struct load_command *)(content + offset);
         switch (load->cmd) {
+        case LC_SEGMENT:
+        {
+            struct segment_command *segment;
+            struct section *section;
+            gint j;
+
+            segment = (struct segment_command *)(content + offset);
+            if (!g_str_equal(segment->segname, "__TEXT")) {
+                segment_index += segment->nsects;
+                break;
+            }
+
+            section = (struct section *)(content + offset + sizeof(*segment));
+            for (j = 0; j < segment->nsects; j++, section++) {
+                segment_index++;
+                if (g_str_equal(section->sectname, "__text"))
+                    text_segment_index = segment_index;
+            }
+            break;
+        }
         case LC_SYMTAB:
         {
             struct symtab_command *table;
-            struct nlist *symbol_info = NULL;
+            struct nlist *symbol;
             gchar *string_table;
             gint j;
 
             table = (struct symtab_command *)(content + offset);
-            symbol_info = (struct nlist *)(content + table->symoff);
+            symbol = (struct nlist *)(content + table->symoff);
             string_table = content + table->stroff;
-            for (j = 0; j < table->nsyms; j++) {
-                uint8_t type;
-                int32_t string_offset;
-                gchar *name;
+            for (j = 0; j < table->nsyms; j++, symbol++) {
+                gboolean defined_in_section = FALSE;
 
-                type = symbol_info[j].n_type;
-                string_offset = symbol_info[j].n_un.n_strx;
+                if ((symbol->n_type & N_TYPE) == N_SECT)
+                    defined_in_section = TRUE;
 
-                name = string_table + string_offset;
-                if ((string_offset == 0) ||
-                    (name[0] == '\0') ||
-                    (name[0] != '_')) {
-                    g_ptr_array_add(all_symbols, NULL);
-                } else {
-                    g_ptr_array_add(all_symbols, name + 1);
+                if (defined_in_section &&
+                    symbol->n_sect == text_segment_index &&
+                    symbol->n_type & N_EXT) {
+                    gchar *name;
+                    int32_t string_offset;
+
+                    string_offset = symbol->n_un.n_strx;
+                    name = string_table + string_offset;
+                    g_print("found: %s\n", name + 1);
                 }
-            }
-            break;
-        }
-        case LC_DYSYMTAB:
-        {
-            struct dysymtab_command *table;
-            gint j;
-
-            table = (struct dysymtab_command *)(content + offset);
-            for (j = 0; j < table->nextdefsym; j++) {
-                const gchar *name;
-
-                name = g_ptr_array_index(all_symbols, table->iextdefsym + j);
-                g_print("found: %s\n", name);
             }
             break;
         }
@@ -106,7 +111,6 @@ main (int argc, char **argv)
         }
         offset += load->cmdsize;
     }
-    g_ptr_array_free(all_symbols, TRUE);
 
     g_free(content);
 
