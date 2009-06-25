@@ -30,7 +30,7 @@ main (int argc, char **argv)
     gsize length;
     gsize offset;
     uint32_t i, n_commands;
-    uint32_t segment_index = 0, text_segment_index = 0;
+    uint32_t section_index = 0, text_section_index = 0;
 
     if (argc < 2) {
         g_print("Usage: %s XXX.dylib\n", argv[0]);
@@ -65,15 +65,15 @@ main (int argc, char **argv)
 
             segment = (struct segment_command *)(content + offset);
             if (!g_str_equal(segment->segname, "__TEXT")) {
-                segment_index += segment->nsects;
+                section_index += segment->nsects;
                 break;
             }
 
             section = (struct section *)(content + offset + sizeof(*segment));
             for (j = 0; j < segment->nsects; j++, section++) {
-                segment_index++;
+                section_index++;
                 if (g_str_equal(section->sectname, "__text"))
-                    text_segment_index = segment_index;
+                    text_section_index = section_index;
             }
             break;
         }
@@ -94,7 +94,7 @@ main (int argc, char **argv)
                     defined_in_section = TRUE;
 
                 if (defined_in_section &&
-                    symbol->n_sect == text_segment_index &&
+                    symbol->n_sect == text_section_index &&
                     symbol->n_type & N_EXT) {
                     gchar *name;
                     int32_t string_offset;
