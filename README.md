@@ -1,4 +1,4 @@
-# How to list symbols from ELF, PE and Mach-O shared libraries in C
+# README
 
 They are sample C programs show how to list from ELF, PE and Mach-O
 shared libraries.
